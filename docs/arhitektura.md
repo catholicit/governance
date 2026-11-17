@@ -19,6 +19,7 @@ Sadržaj:
 10. [Faze](#10-faze)
 11. [Upute za svakodnevni rad](#11-upute-za-svakodnevni-rad)
 12. [Postavljanje od nule](#12-postavljanje-od-nule)
+13. [Uzori: što je preuzeto, a što je novo](#13-uzori-što-je-preuzeto-a-što-je-novo)
 
 ---
 
@@ -523,3 +524,58 @@ Dozvole Appa: `members`, `organization_administration`, `administration`,
 
 Stvarne vrijednosti za `catholicit`: App `catholicit-governance`, ID `5799464`,
 ruleset `main-samo-glasanjem`.
+
+---
+
+## 13. Uzori: što je preuzeto, a što je novo
+
+Sustav je sastavljen od dijelova koji već postoje u javnim GitHub
+organizacijama. **Sama kombinacija** (glasanje većinom koje upravlja članstvom
+cijele organizacije, s planom prelaska na Safe) **nije ustaljena praksa** i
+nisam našao javni repo koji je radi ovako. Provjereno 17.11.2026.
+
+### Organizacija kao kod (`members.yml` + bot uskladi)
+
+| Repo | Što radi | Razlika od nas |
+|---|---|---|
+| [kubernetes/org](https://github.com/kubernetes/org) | `config/kubernetes/org.yaml` opisuje članove, timove i prava; alat **Peribolos** primjenjuje promjene nakon merge-a | PR odobravaju org admini, ne većina članova |
+| [kubernetes-sigs/prow](https://github.com/kubernetes-sigs/prow) | izvor alata Peribolos (`site/content/en/docs/components/cli-tools/peribolos.md`) | alat, ne pravilo glasanja |
+| [knative/community](https://github.com/knative/community) | direktorij `peribolos/`, isti model kao Kubernetes | isto |
+| [istio/community](https://github.com/istio/community) | governance materijal, članstvo kroz PR | isto |
+| [rust-lang/team](https://github.com/rust-lang/team) | `people/`, `teams/`, `repos/` u TOML-u; sinkronizacija na GitHub timove i prava | odobravaju vođe timova |
+| [github-community-projects/safe-settings](https://github.com/github-community-projects/safe-settings) | postavke repoa i organizacije kao kod (GitHub App) | ne upravlja glasanjem |
+
+Odatle je preuzeto: **stanje organizacije je datoteka, promjena je PR, bot
+uskladi**. Tamo PR odobravaju imenovani admini (vlasnici `OWNERS` datoteka).
+Ovdje ga odobrava većina članova.
+
+### Spajanje PR-ova glasanjem
+
+| Repo | Što radi |
+|---|---|
+| [botwillacceptanything/botwillacceptanything](https://github.com/botwillacceptanything/botwillacceptanything) | bot spaja PR kad dobije dovoljno glasova; neaktivno od 2022. |
+| [Chaosthebot/Chaos](https://github.com/Chaosthebot/Chaos) | "kod koji se demokratski sam mijenja": PR-ovi se spajaju glasanjem reakcijama; neaktivno od 2019. |
+| [openpolitics/manifesto](https://github.com/openpolitics/manifesto) | politički manifest koji se mijenja glasanjem na PR-ovima; neaktivno od 2022. |
+
+Odatle je preuzeto: **bot broji glasove na PR-u i sam spaja**. Ti su projekti
+glasanjem mijenjali sadržaj repoa, ne članstvo i prava cijele organizacije.
+Neki su brojali i reakcije bilo koga, a ovdje glasaju samo članovi s `main`,
+glas vrijedi samo za zadnji commit, a novi commit poništava glasove.
+
+### Što je ovdje novo (i zato neprovjereno praksom)
+
+- Spoj tih dvaju uzoraka: **većina članova upravlja članstvom i pravima**
+  cijele organizacije, bez imenovanih admina.
+- **Ruleset koji ni Ownera ne pušta na `main`**, uz bota kao jedinu iznimku.
+- **Safe multisig kao izvor istine za GitHub organizaciju** (faza 3). Za to
+  nisam našao javni primjer, pa je to eksperiment.
+
+Ovaj sustav je zato **mlad i nije provjeren u praksi**. Kubernetes i Rust
+pokazuju da "organizacija kao kod" radi s mnogo ljudi. Chaos i
+botwillacceptanything pokazuju da glasanje botom radi, ali i da takvi projekti
+zamru kad interes padne.
+
+Poznata slabost ovdašnjeg pravila: prag je većina **od svih članova**, pa
+neaktivan član u praksi glasa PROTIV. Ako zajednica naraste, vjerojatno treba
+ili pravilo za uklanjanje neaktivnih članova, ili prag računat od onih koji su
+glasali uz minimalni odaziv (kvorum).
