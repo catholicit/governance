@@ -20,7 +20,10 @@ Sadržaj:
 10. [Isti repo, različit pogled sa svakog čvora](#10-isti-repo-različit-pogled-sa-svakog-čvora)
 11. [Primjer: `catholicit` na Radicleu](#11-primjer-catholicit-na-radicleu)
 12. [Što ni Radicle ne decentralizira](#12-što-ni-radicle-ne-decentralizira)
-13. [Izvori i što još treba provjeriti](#13-izvori-i-što-još-treba-provjeriti)
+13. [Tim kroz vrijeme: dolasci i odlasci](#13-tim-kroz-vrijeme-dolasci-i-odlasci)
+14. [Disk i otkrivanje: usporedba s blockchain čvorom](#14-disk-i-otkrivanje-usporedba-s-blockchain-čvorom)
+15. [Codeberg i Radicle](#15-codeberg-i-radicle)
+16. [Izvori i što još treba provjeriti](#16-izvori-i-što-još-treba-provjeriti)
 
 ---
 
@@ -504,7 +507,116 @@ Pravila koja iz toga slijede:
 
 ---
 
-## 13. Izvori i što još treba provjeriti
+## 13. Tim kroz vrijeme: dolasci i odlasci
+
+Radicle **nema pojam organizacije ni tima**, samo repoe s delegatima. Postoji
+jedna javna Radicle mreža (radicle.network je domena projekta, ne zasebna
+mreža). „Naša mreža” je samo podgraf: čvorovi koji seedaju RID-ove iz našeg
+registra.
+
+**Developer ne treba dozvolu da bi doprinosio.** Svatko s ključem može
+klonirati repo i objaviti patch u svoj namespace. Popis treba voditi samo za
+one koji smiju mergeati (delegate).
+
+| Uloga | Koliko | U Radicleu |
+|---|---|---|
+| Suradnik | cijeli tim + bilo tko izvana | ništa osim `rad auth` |
+| Delegat (maintainer) | 3–5 po repou | DID u identitetskom dokumentu |
+| Prag | npr. 2/3 ili 3/5 | broj u identitetskom dokumentu |
+
+Ne raditi 11 delegata s pragom 6. Prag vrijedi i za merge i za izmjenu
+identiteta, pa bi svaki merge tražio šest ljudi.
+
+| Događaj | Radnja | Tko potpisuje |
+|---|---|---|
+| novi suradnici | samo `org.yaml` (evidencija) + follow na seedovima | nitko |
+| novi maintainer | `rad id update --delegate did:key:…` u svakom repou | prag postojećih delegata (`rad id accept`) |
+| maintainer ode / izgubi ključ | `rad id update` bez njegovog DID-a | prag ostalih, bez njega |
+| povijest odlazećeg | ostaje valjana, samo više ne glasa | |
+
+```mermaid
+flowchart TB
+    SAFE["Glasanje (Safe / governance PR)"] --> ORG["org.yaml: članovi,<br/>delegati po repou, registar RID-ova"]
+    ORG --> SYNC["rad-sync skripta na seedovima (cron)"]
+    SYNC --> POL["seeding policy: allow za RID-ove iz registra"]
+    SYNC --> FOL["follow svih članova"]
+    SYNC --> DIFF{"delegati u org.yaml ==<br/>delegati u identitetu repoa?"}
+    DIFF -- da --> OK["ništa"]
+    DIFF -- ne --> PROP["otvori prijedlog revizije identiteta<br/>(rad id update) u svakom repou"]
+    PROP --> SIGN["delegati svojim ključem: rad id accept"]
+    SIGN --> PRAG{"prag dostignut?"}
+    PRAG -- da --> NEW["nova revizija vrijedi na svim čvorovima"]
+    PRAG -- ne --> SIGN
+```
+
+Bot **ne smije** potpisivati umjesto delegata, jer bi tada bot bio vlast
+(ista granica kao kod Safea). Automatizira se sve osim potpisa.
+
+Seedovi za javni open source: scope `all` za RID-ove iz registra (da patchevi
+vanjskih suradnika stignu bez dogovora), `block` za spam čvorove, barem tri
+seeda na tri infrastrukture.
+
+---
+
+## 14. Disk i otkrivanje: usporedba s blockchain čvorom
+
+Radicle **nema globalnog stanja**. Čvor čuva samo repoe koje sam seeda. Za
+usporedbu, Gnosis arhivski čvor (Nethermind, godinu dana povijesti) treba
+~250 GB jer čuva stanje cijele mreže.
+
+| Dio na disku seeda | Veličina |
+|---|---|
+| naši repoi (RID-ovi iz registra) | koliko su veliki |
+| forkovi suradnika (namespacei u istom repou) | mali, git dijeli objekte |
+| issues, patchevi (COB) | zanemarivo |
+| tablica usmjeravanja (SQLite: RID → čvorovi, adrese) | reda MB, raste s brojem čvorova i repoa, ne s njihovom veličinom |
+| tuđi repoi | 0, osim ako ih eksplicitno seedamo |
+
+Otkrivanje: bootstrap seedovi → node announcements (adrese) → inventory
+announcements (tko ima koji RID, samo popis) → `rad clone` povuče sadržaj
+izravno od čvora koji ga ima. **Nema globalne pretrage**, pa RID treba
+objaviti u README-u ogledala na GitHubu ili Codebergu i na webu.
+
+Procjena: 20 repoa (jedan 2 GB, ostali ~50 MB) s desetcima suradnika je
+~3–4 GB po seedu. Dovoljni su Mac mini ili Oracle Free Tier.
+
+| Rizik | Kontrola |
+|---|---|
+| spam od 10 GB u nečijem namespaceu uz scope `all` | ograničenje veličine fetcha u configu, `block` NID, ili scope `followed` |
+| binarne datoteke u gitu | ne držati ih u gitu; službenog Git LFS-a nema |
+| napušteni forkovi | čišćenje namespacea koji nisu delegati ni praćeni |
+| seed koji slučajno seeda sve | default policy `block`, `allow` samo iz registra |
+
+---
+
+## 15. Codeberg i Radicle
+
+Codeberg je **centralni hosting u vlasništvu zajednice** (Codeberg e.V.,
+Berlin, Forgejo). Radicle je **protokol bez vlasnika**.
+
+| | Codeberg | Radicle |
+|---|---|---|
+| model | jedna hostana instanca | P2P, kod na svakom čvoru koji ga seeda |
+| identitet | račun (e-mail, lozinka, 2FA) | Ed25519 ključ (`did:key`) |
+| tko te može izbaciti | udruga, po pravilima korištenja (npr. neslobodna licenca) | nitko; pojedini seed može odbiti repo |
+| pravo merganja | dozvole u bazi servera | delegati + prag u potpisanom dokumentu |
+| upravljanje | skupština članova udruge | svaki repo sam |
+| issues / PR | u bazi servera | COB-ovi u repou, rade offline |
+| CI, Pages | Forgejo Actions / Woodpecker, Codeberg Pages | nema ugrađeno |
+| otkrivanje | pretraga, explore | slabo |
+| točka kvara | jedna institucija, jurisdikcija, datacentar | bootstrap seedovi (zaobilazivo), DNS za web |
+| suverenost | institucionalna (vjeruješ udruzi) | kriptografska (vjeruješ ključevima) |
+
+Vlastiti Forgejo na Coolifyju je treća varijanta: suverenost operatera, uz
+ovisnost o Oracleu kao infrastrukturi.
+
+Uloge za `catholicit`: **Radicle** je izvor istine za kod i merge, **Safe**
+za članstvo i odluke, **Codeberg i GitHub** su ogledala za vidljivost, a CI
+ide na vlastiti runner.
+
+---
+
+## 16. Izvori i što još treba provjeriti
 
 - [radicle.dev](https://radicle.dev/), glavna stranica od 23.04.2026.
   (prije radicle.xyz)
@@ -522,3 +634,7 @@ treba provjeriti i po potrebi ispraviti:
 - oblik identitetskog dokumenta: `rad inspect --identity`
 - da su DID i NID isti ključ: `rad self`
 - trenutne bootstrap seedove i njihove domene: `rad config`
+- canonical reference rules (prag po grani) u 1.10.x
+- točan naziv opcije za ograničenje veličine fetcha i naredbu za čišćenje
+  namespacea; default seeding policy
+- stvarna potrošnja diska i veličina baze nakon seedanja jednog javnog repoa
