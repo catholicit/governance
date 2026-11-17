@@ -12,7 +12,7 @@ Sadržaj:
 3. [Životni ciklus prijedloga](#3-životni-ciklus-prijedloga)
 4. [Pravilo glasanja](#4-pravilo-glasanja)
 5. [Usklađivanje organizacije (`apply`)](#5-usklađivanje-organizacije-apply)
-6. [`members.yml`, referenca](#6-membersyml-referenca)
+6. [`org.yaml` i `governance.yml`, referenca](#6-orgyaml-i-governanceyml-referenca)
 7. [Sigurnost workflowa](#7-sigurnost-workflowa)
 8. [Model povjerenja: gdje je centralizacija](#8-model-povjerenja-gdje-je-centralizacija)
 9. [Safe, Gnosis i Chiado](#9-safe-gnosis-i-chiado)
@@ -30,7 +30,7 @@ mijenja samo većinom glasova, a promjenu provodi bot koji ne zna ništa drugo.*
 
 ```mermaid
 flowchart LR
-    C["Članovi<br/>(svi ravnopravni)"] -- "PR + glasovi" --> G["catholicit/governance<br/>members.yml"]
+    C["Članovi<br/>(svi ravnopravni)"] -- "PR + glasovi" --> G["catholicit/governance<br/>org.yaml"]
     G -- "većina postignuta" --> B["Bot<br/>GitHub App"]
     B -- "uskladi" --> O["Organizacija<br/>catholicit"]
     O -- "Admin na sve repoe" --> C
@@ -47,8 +47,8 @@ predložiti, a odlučuje većina.
 | Tko | Gdje | Prava | Može sam |
 |---|---|---|---|
 | **Član** | tim `core` | **Admin** na sve repoe osim `governance`, **Read** na `governance` | sve na kodu: repoi, issueji, Actions, postavke repoa; predložiti i glasati |
-| **Bot** `catholicit-governance` (GitHub App) | instaliran na org, sve repoe | članstvo, timovi, postavke organizacije, merge u `governance` | ništa po vlastitoj volji, samo ono što piše na `main` |
-| **Owner** (prijelazno `stepanic`) | uloga u organizaciji | sve, uključujući isključiti pravila | to je centralizacija koju faza 2 uklanja |
+| **Bot** `catholicit-governance` (GitHub App) | instaliran na org, sve repoe | pokreće Peribolos (članstvo, timovi, postavke), merge u `governance` | ništa po vlastitoj volji, samo ono što piše na `main` |
+| **Owner** (`stepanic`, `prilikazasusretsync`) | `admins:` u `org.yaml`, barem 2 | sve, uključujući isključiti pravila | svaki potez je javan, a `apply` ga dnevno poništava |
 | **Bilo tko na GitHubu** | — | forkati `governance`, otvoriti PR | predložiti da postane član |
 
 ```mermaid
@@ -65,14 +65,14 @@ flowchart TB
         GOV["governance"]
     end
     APP["Bot (GitHub App)"]
-    OWN["Owner (prijelazno)"]
+    OWN["Owneri (2)"]
 
     core -- "Admin" --> R1
     core -- "Admin" --> R2
     core -- "Read" --> GOV
     APP -- "jedini smije pisati na main" --> GOV
     APP -- "upravlja" --> core
-    OWN -. "tehnički može sve (faza 2 to uklanja)" .-> org
+    OWN -. "tehnički mogu sve, ali vidljivo" .-> org
 ```
 
 Grana `main` u `governance` zaštićena je rulesetom `main-samo-glasanjem`: nema
@@ -97,10 +97,10 @@ sequenceDiagram
     participant A as apply (workflow)
     participant O as Organizacija
 
-    P->>F: fork + izmjena members.yml
+    P->>F: fork + izmjena org.yaml
     F->>GH: pull request na main
     GH->>Q: pull_request_target
-    Q->>Q: dry-run reconcile nad members.yml iz PR-a
+    Q->>Q: Peribolos dry-run nad org.yaml iz PR-a
     Q->>GH: komentar: glasovi + što će se promijeniti
     V->>GH: recenzija Approve / Request changes
     loop svakih 15 min ili komentar /prebroji
@@ -137,7 +137,7 @@ stateDiagram-v2
 
 ## 4. Pravilo glasanja
 
-- **Glasači** su članovi s popisa `members.yml` **na `main`**, ne iz prijedloga.
+- **Glasači** su svi pod `admins` i `members` u `org.yaml` **na `main`**, ne iz prijedloga.
   Prijedlog koji dodaje 10 novih članova ne može ih iskoristiti za vlastito
   izglasavanje.
 - **Glas** je recenzija na **zadnjem commitu** PR-a: Approve je ZA, Request
@@ -183,29 +183,39 @@ promijeniti i prag, ali samo uz trenutni prag.
 
 ## 5. Usklađivanje organizacije (`apply`)
 
-`scripts/reconcile.py` uspoređuje `members.yml` sa stvarnim stanjem i radi
-samo razliku. Bez `--apply` samo ispiše plan; isti plan bot stavlja u komentar
-svakog prijedloga.
+Primjenu radi **[Peribolos](https://docs.prow.k8s.io/docs/components/cli-tools/peribolos/)**,
+alat iz Kubernetesova Prow ekosustava, isti koji upravlja organizacijama
+`kubernetes`, `kubernetes-sigs`, `knative` i `istio`. Ne izmišljamo vlastiti
+mehanizam, nego uzimamo provjeren. Kontejner je pinan na točnu verziju u
+`scripts/peribolos.sh` i mijenja se samo glasanjem.
+
+Peribolos nema "sve repoe" pa bi s `--fix-team-repos` timu `core` oduzeo prava
+na svaki repo koji nije izričito naveden. Zato `scripts/render.py` prije
+primjene dopiše sve repoe organizacije prema pravilu `all_repos` iz
+`governance.yml`. To je jedini naš dodatak između `org.yaml` i Peribolosa.
 
 ```mermaid
 flowchart TD
-    Y["members.yml na main"] --> R["reconcile.py"]
-    GHAPI["Stanje organizacije<br/>(GitHub API)"] --> R
-    R --> T1["Tim core postoji?"]
-    R --> T2["Članovi:<br/>pozovi nove, dodaj u core,<br/>makni iz core one kojih nema"]
-    R --> T3["Owneri:<br/>spusti Ownera koji nije pod owners:<br/>(nikad ne stvara Ownera)"]
-    R --> T4["Uklanjanja:<br/>makni iz organizacije,<br/>otkaži pozivnice"]
-    R --> T5["Repoi:<br/>core = admin,<br/>restricted_repos = read"]
-    R --> T6["Postavke organizacije"]
+    Y["org.yaml na main"] --> RD["render.py<br/>+ svi repoi za tim core"]
+    GV["governance.yml<br/>all_repos, kočnice"] --> RD
+    GHAPI["Popis repoa<br/>(GitHub API)"] --> RD
+    RD --> P["Peribolos<br/>(kontejner, pinana verzija)"]
+    GV --> P
+    P --> T1["Owneri i članovi:<br/>pozovi, promoviraj, spusti, ukloni"]
+    P --> T2["Timovi:<br/>stvori, opis, maintaineri, članovi"]
+    P --> T3["Prava timova na repoe"]
+    P --> T4["Postavke organizacije"]
+    P --> F["peribolos_plan.py<br/>čitljiv popis promjena"]
 ```
 
-Zaštite ugrađene u skriptu:
+Peribolosove sigurnosne kočnice (vrijednosti u `governance.yml`):
 
-- Prazan popis članova ili prazan `owners:` znači prekid, ništa se ne mijenja.
-- Duplikati u popisu znače prekid.
-- Owner se ne spušta ako nijedan Owner s popisa `owners:` još nema tu ulogu,
-  tako da organizacija nikad ne ostane bez Ownera.
-- Bot nikad ne dodjeljuje ulogu Owner. To ostaje ručni čin postojećeg Ownera.
+| Zastavica | Vrijednost | Značenje |
+|---|---|---|
+| `--min-admins` | 2 | konfiguracija mora imati barem 2 Ownera; Peribolos manje ni ne dopušta |
+| `--maximum-removal-delta` | 0.5 | odbija korak koji uklanja više od pola članstva (Kubernetes koristi 0.25, ali u maloj grupi bi to blokiralo svako uklanjanje) |
+| `--confirm` | samo u `apply` | bez nje Peribolos samo ispiše što bi napravio |
+| `--require-self` | false | izvršitelj je App, a ne korisnički račun, pa ne može biti na popisu admina |
 
 Kada se `apply` pokreće:
 
@@ -217,51 +227,84 @@ Kada se `apply` pokreće:
 
 ---
 
-## 6. `members.yml`, referenca
+## 6. `org.yaml` i `governance.yml`, referenca
+
+**`org.yaml`** je standardni Peribolosov format (vidi
+[kubernetes/org](https://github.com/kubernetes/org/blob/main/config/kubernetes/org.yaml)
+za veliki primjer). Svi navedeni pod `admins` i `members` su glasači.
 
 ```yaml
-org: catholicit
+orgs:
+  catholicit:
+    default_repository_permission: read
+    members_can_create_repositories: true
+    admins:                 # Owneri, barem 2
+      - prilikazasusretsync
+      - stepanic
+    members: []             # ostali članovi
+    teams:
+      core:
+        description: Svi članovi, ravnopravni
+        privacy: closed
+        maintainers:        # Owneri su u timu uvijek maintaineri
+          - prilikazasusretsync
+          - stepanic
+        members: []         # svi ostali članovi
+        repos:
+          governance: read  # iznimka od all_repos
+```
 
+**`governance.yml`** su naša pravila iznad Peribolosa:
+
+```yaml
 quorum:
-  majority: true          # floor(n/2) + 1
-  min_open_hours: 24      # osim kad je jednoglasno
+  majority: true            # floor(n/2) + 1
+  min_open_hours: 24        # osim kad je jednoglasno
 
-team: core                # tim u kojem su svi članovi
-repo_permission: admin    # pravo tima na sve repoe
+all_repos:                  # render.py: tim dobiva ovo pravo na sve repoe
+  team: core
+  permission: admin
 
-restricted_repos:         # iznimke od repo_permission
-  governance: pull
+peribolos:
+  min_admins: 2
+  maximum_removal_delta: 0.5
 
-owners:                   # tko smije biti Owner; ostali se spuštaju
-  - stepanic              # prijelazno, faza 2: samo bot račun
-
-org_settings:             # PATCH /orgs/catholicit
-  default_repository_permission: read
-  members_can_create_repositories: true
-
-safe:                     # faza 3, vidi poglavlje 9
+safe:                       # faza 3, vidi poglavlje 9
   active: chi
-  gno:                    # 0x... Safe na Gnosis Chainu
-  chi:                    # 0x... Safe na Chiado testnetu
+  gno:                      # 0x... Safe na Gnosis Chainu
+  chi:                      # 0x... Safe na Chiado testnetu
 
-members:
-  - github: stepanic
-    evm:                  # 0x... adresa walleta, ista na svim EVM lancima
+evm:                        # adresa walleta po GitHub korisniku
+  stepanic:                 # 0x..., ista na svim EVM lancima
 ```
 
 ```mermaid
 erDiagram
-    MEMBERS_YML ||--|| QUORUM : "pravila"
-    MEMBERS_YML ||--o{ OWNER : "owners"
-    MEMBERS_YML ||--|{ MEMBER : "members"
-    MEMBERS_YML ||--o| SAFE : "safe"
+    ORG_YAML ||--|{ ADMIN : "admins"
+    ORG_YAML ||--o{ MEMBER : "members"
+    ORG_YAML ||--|{ TEAM : "teams"
+    GOVERNANCE_YML ||--|| QUORUM : "quorum"
+    GOVERNANCE_YML ||--|| ALL_REPOS : "all_repos"
+    GOVERNANCE_YML ||--o| SAFE : "safe"
+    GOVERNANCE_YML ||--o{ EVM_ADDRESS : "evm"
     SAFE ||--o{ SAFE_DEPLOYMENT : "po lancu"
-    MEMBER }o--o| EVM_ADDRESS : "evm"
+    ADMIN |o--o| EVM_ADDRESS : "username"
+    MEMBER |o--o| EVM_ADDRESS : "username"
     SAFE_DEPLOYMENT }o--o{ EVM_ADDRESS : "vlasnici Safea"
 
-    MEMBER {
-        string github "GitHub username"
-        string evm "0x..., neobavezno"
+    TEAM {
+        string name "core"
+        list maintainers
+        list members
+        map repos "iznimke"
+    }
+    QUORUM {
+        bool majority
+        int min_open_hours
+    }
+    ALL_REPOS {
+        string team "core"
+        string permission "admin"
     }
     SAFE {
         string active "gno ili chi"
@@ -269,10 +312,6 @@ erDiagram
     SAFE_DEPLOYMENT {
         string shortName "gno, chi (EIP-3770)"
         string address "0x..."
-    }
-    QUORUM {
-        bool majority
-        int min_open_hours
     }
 ```
 
@@ -287,13 +326,13 @@ bota**:
 ```mermaid
 flowchart LR
     subgraph pr["Pull request (nepovjerljivo)"]
-        PY["members.yml iz PR-a"]
+        PY["org.yaml iz PR-a"]
         PW["izmijenjeni workflow / skripte"]
     end
     subgraph main["main (povjerljivo)"]
         MW["quorum.yml"]
         MS["scripts/*.py"]
-        MY["members.yml"]
+        MY["org.yaml"]
     end
     KEY[("Ključ bota<br/>secret")]
 
@@ -301,14 +340,14 @@ flowchart LR
     KEY --> RUN
     MS --> RUN
     MY -- "tko glasa" --> RUN
-    PY -- "samo kao podatak,<br/>yaml.safe_load" --> RUN
+    PY -- "samo kao podatak<br/>za Peribolos dry-run" --> RUN
     PW -. "nikad se ne izvršava" .-x RUN
 ```
 
 - `pull_request_target` i `issue_comment` uvijek izvršavaju workflow s `main`.
 - Checkout je uvijek `main`; kod iz PR-a se ne checkouta i ne pokreće.
-- `members.yml` iz PR-a dohvaća se preko API-ja i samo parsira
-  (`yaml.safe_load`) za prikaz plana.
+- `org.yaml` iz PR-a dohvaća se preko API-ja i predaje Peribolosu u dry-runu
+  (bez `--confirm`) samo kao podatak, za prikaz plana.
 - Promjena workflowa ili skripti djeluje tek kad je **izglasana i spojena**.
 - `permissions: {}` na `GITHUB_TOKEN`-u; sve ide preko kratkotrajnog tokena
   bota (vrijedi 1 h).
@@ -331,7 +370,7 @@ flowchart TB
     subgraph smanjeno["Smanjeno / vidljivo"]
         RULE["Ruleset: ni Owner ne pusha na main"]
         DAILY["apply svaki dan poništava ručne promjene"]
-        PUBLIC["Sve javno: members.yml, glasovi, Actions logovi"]
+        PUBLIC["Sve javno: org.yaml, glasovi, Actions logovi"]
     end
     subgraph decentralizirano["Stvarno decentralizirano (cilj)"]
         SAFE["Safe multisig<br/>svaki član sam generira ključ,<br/>prag u ugovoru, nema emaila"]
@@ -358,6 +397,24 @@ flowchart LR
     CHECK -- ne --> EXIT["Zajednica nastavlja na<br/>Radicle / Codeberg<br/>s istim Safeom i kodom"]
 ```
 
+### Može li Owner biti trajno zaključan?
+
+Tehnički da: račun s nasumičnom lozinkom koja se ne spremi, 2FA bez
+sačuvanih recovery kodova, bez SSH ključeva i tokena. Do njega tada ne može
+nitko, a GitHub support u pravilu ni ne vraća takve račune. Zašto to (još) ne
+radimo:
+
+- **Ne može se dokazati da je zaboravljeno.** Onaj tko provodi ceremoniju mogao
+  je potajno spremiti lozinku, a audit log organizacije na Free planu vide samo
+  Owneri.
+- **Organizacija se zamrzne** za sve što smije samo Owner: odobravanje novih
+  dozvola Appu, **opoziv procurjelog ključa Appa**, promjena plana.
+- **Peribolos traži barem 2 Ownera** (`--min-admins` ne prima manje od 2).
+- Izlaz u nuždi postoji samo ako App smije promovirati Ownera glasanjem. Prvi
+  test toga je upravo `apply` koji poziva drugog Ownera iz `org.yaml`.
+
+Zato je to faza 4, eksperiment, kad bude dovoljno članova.
+
 ---
 
 ## 9. Safe, Gnosis i Chiado
@@ -365,7 +422,8 @@ flowchart LR
 ### Adrese članova: bez lanca
 
 Isti privatni ključ daje **istu adresu na svim EVM lancima** (Ethereum, Gnosis,
-Chiado...). Zato član ima samo `evm: 0x...`, bez oznake lanca.
+Chiado...). Zato član u `governance.yml` pod `evm:` ima samo adresu, bez
+oznake lanca.
 
 Iznimka: ako netko kao osobni wallet koristi smart contract wallet (npr.
 vlastiti Safe), ta adresa postoji samo na lancu gdje je deployan. Takav član
@@ -417,7 +475,7 @@ sequenceDiagram
     participant Q as quorum
     participant A as apply
 
-    P->>GH: PR (izmjena members.yml)
+    P->>GH: PR (izmjena org.yaml)
     Q->>GH: komentar s hashom prijedloga<br/>(repo, PR broj, head commit)
     V->>S: potpis poruke s tim hashom (EIP-712, off-chain, besplatno)
     Q->>S: provjeri potpise: vlasnici Safea, prag dostignut
@@ -432,7 +490,7 @@ Planirano:
 - **Dokaz vlasništva adrese:** član potpiše poruku
   `catholicit: github=<username>`, bot provjeri da potpis odgovara `evm`
   adresi. Nitko ne može upisati tuđu adresu.
-- **Sinkronizacija:** popis vlasnika Safea i `members.yml` moraju se poklapati;
+- **Sinkronizacija:** popis vlasnika Safea i glasača iz `org.yaml` moraju se poklapati;
   `apply` prijavljuje razliku.
 - Potpisi su off-chain (EIP-712 / Safe message), pa glasanje ne košta gas.
   On-chain su samo promjene vlasnika i praga Safea, koje na Gnosisu koštaju
@@ -445,18 +503,17 @@ Planirano:
 ```mermaid
 timeline
     title Put do decentralizacije
-    Faza 1 (gotovo 17.11.2026.) : governance repo i members.yml
+    Faza 1 (gotovo 17.11.2026.) : governance repo, org.yaml i Peribolos
                                 : glasanje PR recenzijama, većina + 24 h
-                                : bot App, ruleset na main
-                                : apply uskladi org svaki dan
-    Faza 2 : bot račun catholicit-bot kao jedini Owner
-           : ljudi izlaze iz owners
-           : mirror na Codeberg i Radicle
+                                : bot App, ruleset na main, 2 Ownera
+    Faza 2 : mirror na Codeberg i Radicle
+           : pravo na fork
     Faza 3 : Safe na Chiadu, zatim na Gnosisu
            : evm adrese i dokaz vlasništva
            : quorum provjerava Safe potpise
-    Faza 4 : Radicle delegati = članovi
-           : GitHub postaje samo sučelje
+    Faza 4 : eksperiment, zaključani root Owneri
+           : izlaz u nuždi preko glasanja
+           : Radicle delegati = članovi
 ```
 
 ---
@@ -466,11 +523,17 @@ timeline
 ### Pridruživanje
 
 1. Fork `catholicit/governance`.
-2. U `members.yml` dodaj:
+2. U `org.yaml` dodaj svoj username pod `members:` i pod `members:` tima
+   `core`:
    ```yaml
-     - github: tvoj-username
-       evm:              # neobavezno
+       members:
+         - tvoj-username
+       teams:
+         core:
+           members:
+             - tvoj-username
    ```
+   Neobavezno, u `governance.yml` pod `evm:` dodaj `tvoj-username: 0x...`.
 3. Otvori PR. Bot u komentar upiše stanje glasanja.
 4. Kad prođe, prihvati pozivnicu na
    <https://github.com/orgs/catholicit/invitation>.
@@ -483,7 +546,7 @@ timeline
 
 ### Izlazak ili izbacivanje
 
-PR koji briše člana iz `members.yml`. Nakon spajanja bot ga makne iz tima i
+PR koji briše člana iz `org.yaml` (pod `members` i iz tima `core`). Nakon spajanja bot ga makne iz tima i
 organizacije i otkaže pozivnicu ako je još visi.
 
 ### Provjera bez promjena
@@ -491,7 +554,10 @@ organizacije i otkaže pozivnicu ako je još visi.
 Actions → **apply** → Run workflow → `dry_run` uključen. Ili lokalno:
 
 ```bash
-GH_TOKEN=$(gh auth token) python3 scripts/reconcile.py
+GH_TOKEN=$(gh auth token) python3 scripts/render.py > /tmp/rendered.yaml
+(umask 077; gh auth token > /tmp/tok)
+PERIBOLOS_TOKEN_FILE=/tmp/tok scripts/peribolos.sh /tmp/rendered.yaml 2>&1 | python3 scripts/peribolos_plan.py
+rm /tmp/tok
 ```
 
 ### Ako nešto zapne
@@ -511,7 +577,7 @@ Za slučaj da se sustav mora ponovno podići (npr. u novoj organizaciji):
 
 ```mermaid
 flowchart TD
-    A["1. Javni repo governance<br/>members.yml, scripts/, workflows"] --> B["2. GitHub App iz app/manifest.json<br/>(POST manifesta na<br/>/organizations/ORG/settings/apps/new)"]
+    A["1. Javni repo governance<br/>org.yaml, governance.yml, scripts/, workflows"] --> B["2. GitHub App iz app/manifest.json<br/>(POST manifesta na<br/>/organizations/ORG/settings/apps/new)"]
     B --> C["3. scripts/bootstrap-app.sh &lt;code&gt;<br/>App ID u varijablu, ključ ravno u secret"]
     C --> D["4. Instalacija Appa na org,<br/>All repositories"]
     D --> E["5. Ruleset na main:<br/>deletion, non_fast_forward, update;<br/>bypass samo App"]
@@ -534,7 +600,7 @@ organizacijama. **Sama kombinacija** (glasanje većinom koje upravlja članstvom
 cijele organizacije, s planom prelaska na Safe) **nije ustaljena praksa** i
 nisam našao javni repo koji je radi ovako. Provjereno 17.11.2026.
 
-### Organizacija kao kod (`members.yml` + bot uskladi)
+### Organizacija kao kod (`org.yaml` + Peribolos)
 
 | Repo | Što radi | Razlika od nas |
 |---|---|---|

@@ -1,5 +1,5 @@
-# Makes the organization match members.yml after every merge, and once a day
-# to undo any change made by hand outside the vote.
+# Makes the organization match org.yaml with Peribolos after every merge, and
+# once a day to undo any change made by hand outside the vote.
 name: apply
 
 on:
@@ -34,13 +34,20 @@ jobs:
         with:
           persist-credentials: false
       - run: pip install --quiet pyyaml
-      - name: Reconcile organization
+      - name: Render config
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
+        run: python3 scripts/render.py > "$RUNNER_TEMP/rendered.yaml" && cat "$RUNNER_TEMP/rendered.yaml"
+      - name: Peribolos
+        env:
+          PERIBOLOS_APP_ID: ${{ vars.GOVERNANCE_APP_ID }}
+          APP_KEY: ${{ secrets.GOVERNANCE_APP_PRIVATE_KEY }}
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
         run: |
-          if [ "$DRY_RUN" = "true" ]; then
-            python3 scripts/reconcile.py
-          else
-            python3 scripts/reconcile.py --apply
-          fi
+          export PERIBOLOS_APP_KEY_FILE="$RUNNER_TEMP/app.pem"
+          (umask 077; printf '%s\n' "$APP_KEY" > "$PERIBOLOS_APP_KEY_FILE")
+          unset APP_KEY
+          confirm=--confirm
+          [ "$DRY_RUN" = "true" ] && confirm=
+          scripts/peribolos.sh "$RUNNER_TEMP/rendered.yaml" $confirm 2>&1 \
+            | tee "$RUNNER_TEMP/peribolos.log" | python3 scripts/peribolos_plan.py

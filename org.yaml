@@ -1,0 +1,33 @@
+# Stanje organizacije github.com/catholicit u formatu alata Peribolos
+# (https://docs.prow.k8s.io/docs/components/cli-tools/peribolos/),
+# istom koji koriste kubernetes/org, knative/community i istio/community.
+#
+# Mijenja se isključivo pull requestom koji prođe glasanje (governance.yml).
+# Svi koji su ovdje navedeni (admins + members) su glasači.
+#
+# Napomena: tim `core` dobiva pravo i na SVE repoe organizacije prema pravilu
+# `all_repos` u governance.yml; scripts/render.py ih dopiše prije primjene.
+orgs:
+  catholicit:
+    default_repository_permission: read
+    members_can_create_repositories: true
+
+    # Owneri organizacije. Peribolos traži barem 2 (--min-admins=2).
+    admins:
+      - prilikazasusretsync
+      - stepanic
+
+    # Ostali članovi (bez uloge Owner).
+    members: []
+
+    teams:
+      core:
+        description: Svi članovi, ravnopravni
+        privacy: closed
+        # Owneri su u timu uvijek maintaineri (GitHub ih tako postavlja).
+        maintainers:
+          - prilikazasusretsync
+          - stepanic
+        members: []
+        repos:
+          governance: read

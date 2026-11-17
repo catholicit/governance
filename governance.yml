@@ -1,0 +1,33 @@
+# Pravila upravljanja organizacijom catholicit. Mijenjaju se istim glasanjem
+# kao i org.yaml. Glasači su svi iz org.yaml (admins + members).
+
+quorum:
+  # Za merge treba više od polovice članova (floor(n/2) + 1).
+  # Autor PR-a, ako je član, računa se kao glas ZA.
+  majority: true
+  # Prijedlog mora biti otvoren barem ovoliko sati, osim ako je jednoglasan.
+  min_open_hours: 24
+
+# Tim koji dobiva isto pravo na sve repoe organizacije, osim onih koji su mu
+# u org.yaml izričito navedeni (npr. governance: read).
+all_repos:
+  team: core
+  permission: admin
+
+# Sigurnosne kočnice alata Peribolos.
+peribolos:
+  min_admins: 2                 # Peribolos ne dopušta manje od 2
+  maximum_removal_delta: 0.5    # najviše pola članstva uklonjeno u jednom koraku
+
+# Safe multisig po lancu (faza 3). Ključ je EIP-3770 kratko ime lanca, isto
+# kao u Safe URL-ovima (app.safe.global/home?safe=gno:0x...).
+safe:
+  active: chi   # lanac koji quorum provjerava: prvo testnet, zatim gno
+  gno:          # Gnosis Chain, chainId 100, produkcija
+  chi:          # Chiado testnet, chainId 10200, proba
+
+# EVM adrese članova, iste na svim EVM lancima (isti ključ = ista adresa).
+# Neobavezno dok se ne uvede glasanje Safe potpisima.
+evm:
+  stepanic:
+  prilikazasusretsync:
