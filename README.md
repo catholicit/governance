@@ -1,5 +1,7 @@
 # catholicit/governance
 
+> Detaljna dokumentacija s dijagramima: [`docs/arhitektura.md`](docs/arhitektura.md)
+
 Organizacija **github.com/catholicit** upravlja se glasanjem, a ne preko
 administratora. Ovaj repo je njen ustav i njen jedini administrator.
 
@@ -16,7 +18,7 @@ Otvori pull request koji te dodaje u [`members.yml`](members.yml):
 
 ```yaml
   - github: tvoj-username
-    eth:            # neobavezno, za buduće glasanje Safe potpisima
+    evm:            # neobavezno: adresa walleta, za glasanje Safe potpisima
 ```
 
 Kad prijedlog prođe, bot ti pošalje pozivnicu u organizaciju. Prihvati je na
@@ -63,7 +65,7 @@ spusti u običnog člana.
 1. ✅ Governance repo, glasanje PR recenzijama, bot uskladi organizaciju.
 2. ⏳ Bot račun `catholicit-bot` postaje jedini Owner, ljudi se spuštaju u
    članove, ključ se dijeli Shamirom. Mirror na Codeberg/Radicle.
-3. ⏳ Glasanje Safe multisig potpisima (svaki član ima `eth` adresu); `quorum`
+3. ⏳ Glasanje Safe multisig potpisima (svaki član ima `evm` adresu); `quorum`
    provjerava on-chain potpise umjesto PR recenzija.
 
 ## Postavljanje (jednom)
