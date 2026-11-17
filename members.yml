@@ -34,7 +34,16 @@ org_settings:
   default_repository_permission: read
   members_can_create_repositories: true
 
-# `eth` je adresa za fazu 3 (glasanje Safe potpisima). Može ostati prazna.
+# Safe multisig po lancu (faza 3). Ključ je EIP-3770 kratko ime lanca, isto
+# kao u Safe URL-ovima (app.safe.global/home?safe=gno:0x...). Safe je ugovor
+# na konkretnom lancu, pa adresa ne mora biti ista na oba.
+safe:
+  active: chi   # lanac koji quorum provjerava: prvo testnet, zatim gno
+  gno:          # Gnosis Chain, chainId 100, produkcija
+  chi:          # Chiado testnet, chainId 10200, proba
+
+# `evm` je adresa člana, ista na svim EVM lancima (isti ključ = ista adresa).
+# Neobavezna dok se ne uvede glasanje Safe potpisima.
 members:
   - github: stepanic
-    eth:
+    evm:
