@@ -410,8 +410,12 @@ radimo:
 - **Organizacija se zamrzne** za sve što smije samo Owner: odobravanje novih
   dozvola Appu, **opoziv procurjelog ključa Appa**, promjena plana.
 - **Peribolos traži barem 2 Ownera** (`--min-admins` ne prima manje od 2).
-- Izlaz u nuždi postoji samo ako App smije promovirati Ownera glasanjem. Prvi
-  test toga je upravo `apply` koji poziva drugog Ownera iz `org.yaml`.
+- Izlaz u nuždi postoji samo ako App smije promovirati Ownera glasanjem.
+  **Provjereno 17.11.2026.: smije.** Prvi Peribolos `apply` (nakon PR #3)
+  pozvao je `prilikazasusretsync` s ulogom `admin` (Owner) kao GitHub App.
+  Dakle, i uz zaključane root račune, većina može izglasati novog ljudskog
+  Ownera. Ostaje problem da procurjeli ključ Appa ne može opozvati nitko osim
+  Ownera.
 
 Zato je to faza 4, eksperiment, kad bude dovoljno članova.
 
