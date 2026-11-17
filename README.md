@@ -7,19 +7,20 @@ administratora. Ovaj repo je njen ustav i njen jedini administrator.
 
 - **Svi članovi su ravnopravni.** Svi su u timu `core` s pravom **Admin** na sve
   repoe (osim ovog, koji se mijenja samo glasanjem).
-- **Nitko nije iznad drugih.** Owner organizacije je bot (GitHub App
-  `catholicit-governance`), koji radi isključivo ono što piše u `members.yml`
-  na grani `main`.
+- **Stanje organizacije je [`org.yaml`](org.yaml)** u formatu alata
+  [Peribolos](https://docs.prow.k8s.io/docs/components/cli-tools/peribolos/),
+  istog koji koriste Kubernetes, Knative i Istio. Pravila glasanja su u
+  [`governance.yml`](governance.yml).
+- **Primjenu radi bot** (GitHub App `catholicit-governance`), isključivo prema
+  onome što piše na grani `main`.
 - **`main` mijenja samo bot**, i to tek kad prijedlog dobije većinu.
 
 ## Kako se pridružiti
 
-Otvori pull request koji te dodaje u [`members.yml`](members.yml):
-
-```yaml
-  - github: tvoj-username
-    evm:            # neobavezno: adresa walleta, za glasanje Safe potpisima
-```
+Otvori pull request koji te dodaje u [`org.yaml`](org.yaml), pod `members:`
+organizacije i pod `members:` tima `core`. Neobavezno, u
+[`governance.yml`](governance.yml) pod `evm:` dodaj adresu walleta za buduće
+glasanje Safe potpisima.
 
 Kad prijedlog prođe, bot ti pošalje pozivnicu u organizaciju. Prihvati je na
 <https://github.com/orgs/catholicit/invitation>.
@@ -37,36 +38,32 @@ Kad prijedlog prođe, bot ti pošalje pozivnicu u organizaciju. Prihvati je na
    `/prebroji`. Rezultat i popis promjena u organizaciji piše u komentar na PR-u.
 6. Kad prijedlog prođe, bot ga spoji, a `apply` workflow uskladi organizaciju.
 
-Pravila glasanja (`quorum:` u `members.yml`) i sam kod bota (`scripts/`,
+Pravila glasanja (`governance.yml`) i sam kod bota (`scripts/`,
 `.github/workflows/`) mijenjaju se istim postupkom.
 
 ## Što bot radi
 
 | Workflow | Kada | Što |
 |---|---|---|
-| `quorum` | PR, `/prebroji`, svakih 15 min | broji glasove, spaja prihvaćene prijedloge |
-| `apply` | merge na `main`, svaki dan | poziva i uklanja članove, tim `core`, prava na repoe, postavke organizacije; ispravlja ručne promjene |
+| `quorum` | PR, `/prebroji`, svakih 15 min | broji glasove, u komentar stavi Peribolos dry-run, spaja prihvaćene prijedloge |
+| `apply` | merge na `main`, svaki dan | Peribolos: Owneri, članovi, tim `core`, prava na repoe, postavke organizacije; ispravlja ručne promjene |
 | `backup` | svaki dan | mirror svih repoa na Codeberg (kad su postavljeni `CODEBERG_TOKEN` i `CODEBERG_ORG`) |
-
-Bot nikad ne dodjeljuje ulogu Owner. Ownera koji nije naveden pod `owners:`
-spusti u običnog člana.
 
 ## Gdje je povjerenje (iskreno)
 
-- **Privatni ključ GitHub Appa** i pristup bot računu koji je Owner. Tko ih ima,
-  može zaobići glasanje. Plan: ključ i recovery kodove podijeliti Shamirovom
-  shemom među više članova (npr. 3-od-5), tako da ih nitko nema sam.
+- **Dva Ownera** (`admins:` u `org.yaml`; Peribolos ne dopušta manje od 2).
+  Tehnički mogu sve, ali svaki njihov potez je javan, a `apply` svaki dan
+  vraća organizaciju na izglasano stanje.
+- **Privatni ključ GitHub Appa.** Tko ga ima, može zaobići glasanje.
 - **GitHub** može zaključati organizaciju. Zato postoji `backup`.
-- **Prijelazno stanje:** dok je `stepanic` naveden pod `owners:`, on tehnički može
-  sve. Faza 2 ga uklanja.
 
 ## Faze
 
-1. ✅ Governance repo, glasanje PR recenzijama, bot uskladi organizaciju.
-2. ⏳ Bot račun `catholicit-bot` postaje jedini Owner, ljudi se spuštaju u
-   članove, ključ se dijeli Shamirom. Mirror na Codeberg/Radicle.
-3. ⏳ Glasanje Safe multisig potpisima (svaki član ima `evm` adresu); `quorum`
-   provjerava on-chain potpise umjesto PR recenzija.
+1. ✅ Governance repo, glasanje PR recenzijama, Peribolos uskladi organizaciju.
+2. ⏳ Mirror na Codeberg i Radicle (pravo na fork).
+3. ⏳ Glasanje Safe multisig potpisima (svaki član ima `evm` adresu u
+   `governance.yml`); `quorum` provjerava potpise umjesto PR recenzija.
+4. ⏳ Eksperiment: zaključani root Owneri, uz izlaz u nuždi preko glasanja.
 
 ## Postavljanje (jednom)
 

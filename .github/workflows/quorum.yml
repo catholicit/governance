@@ -2,7 +2,7 @@
 #
 # Security: pull_request_target and issue_comment run this file from `main`,
 # never from the pull request. The PR's code is never checked out or executed;
-# its members.yml is only downloaded and parsed as data for the plan preview.
+# its org.yaml is only downloaded and handed to a Peribolos dry run as data.
 name: quorum
 
 on:
@@ -42,4 +42,10 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
           PR: ${{ github.event.pull_request.number || github.event.issue.number }}
-        run: python3 scripts/quorum.py ${PR:+--pr "$PR"}
+          PERIBOLOS_APP_ID: ${{ vars.GOVERNANCE_APP_ID }}
+          APP_KEY: ${{ secrets.GOVERNANCE_APP_PRIVATE_KEY }}
+        run: |
+          export PERIBOLOS_APP_KEY_FILE="$RUNNER_TEMP/app.pem"
+          (umask 077; printf '%s\n' "$APP_KEY" > "$PERIBOLOS_APP_KEY_FILE")
+          unset APP_KEY
+          python3 scripts/quorum.py ${PR:+--pr "$PR"}

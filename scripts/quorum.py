@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Count member votes on open pull requests and merge the ones that pass.
 
-Members and rules come from members.yml on the base branch (the checked-out
-copy), never from the pull request itself, so a proposal cannot add voters
-for its own benefit.
+Voters (admins + members in org.yaml) and rules (governance.yml) come from the
+base branch (the checked-out copy), never from the pull request itself, so a
+proposal cannot add voters for its own benefit.
 
 A vote is an APPROVE review on the pull request's current head commit; pushing
 new commits resets the votes. The author counts as a YES if they are a member.
@@ -61,23 +61,31 @@ def upsert_comment(repo, number, body):
     gh.post(f"/repos/{repo}/issues/{number}/comments", {"body": body})
 
 
-def reconcile_plan(repo, pr):
-    """Dry-run the org reconcile against the PR's members.yml (read as data only)."""
+def org_plan(pr):
+    """Peribolos dry run of the PR's org.yaml (read as data only, never executed)."""
+    here = Path(__file__).parent
     try:
-        f = gh.get(f"/repos/{pr['head']['repo']['full_name']}/contents/members.yml?ref={pr['head']['sha']}")
+        f = gh.get(f"/repos/{pr['head']['repo']['full_name']}/contents/org.yaml?ref={pr['head']['sha']}")
         content = base64.b64decode(f["content"]).decode()
-    except (gh.GitHubError, KeyError, TypeError) as e:
-        return f"members.yml nije dohvatljiv iz PR-a: {e}"
-    with tempfile.NamedTemporaryFile("w", suffix=".yml", delete=False) as tmp:
-        tmp.write(content)
-    r = subprocess.run([sys.executable, str(Path(__file__).parent / "reconcile.py"), "--config", tmp.name],
-                       capture_output=True, text=True)
-    os.unlink(tmp.name)
-    return (r.stdout + r.stderr).strip()
+        yaml.safe_load(content)
+    except (gh.GitHubError, KeyError, TypeError, yaml.YAMLError) as e:
+        return f"org.yaml iz PR-a nije dohvatljiv ili nije ispravan YAML: {e}"
+    with tempfile.TemporaryDirectory() as d:
+        src, out = Path(d, "org.yaml"), Path(d, "rendered.yaml")
+        src.write_text(content)
+        r = subprocess.run([sys.executable, str(here / "render.py"), "--org-config", str(src)],
+                           capture_output=True, text=True)
+        if r.returncode:
+            return f"render.py nije uspio:\n{r.stderr.strip()}"
+        out.write_text(r.stdout)
+        run = subprocess.run([str(here / "peribolos.sh"), str(out)], capture_output=True, text=True)
+        plan = subprocess.run([sys.executable, str(here / "peribolos_plan.py")],
+                              input=run.stdout + run.stderr, capture_output=True, text=True)
+        return plan.stdout.strip()
 
 
 def process(repo, pr, cfg, members):
-    plan_text = reconcile_plan(repo, pr)
+    plan_text = org_plan(pr)
     n = len(members)
     needed = n // 2 + 1
     min_hours = (cfg.get("quorum") or {}).get("min_open_hours", 24)
@@ -124,15 +132,19 @@ def process(repo, pr, cfg, members):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--config", default="members.yml")
+    ap.add_argument("--org-config", default="org.yaml")
+    ap.add_argument("--governance", default="governance.yml")
     ap.add_argument("--pr", type=int)
     args = ap.parse_args()
 
     repo = os.environ["GITHUB_REPOSITORY"]
-    cfg = yaml.safe_load(Path(args.config).read_text())
-    members = {m["github"].strip().lower() for m in cfg.get("members") or [] if m.get("github")}
+    cfg = yaml.safe_load(Path(args.governance).read_text()) or {}
+    org_cfg = yaml.safe_load(Path(args.org_config).read_text())
+    members = set()
+    for org in org_cfg["orgs"].values():
+        members |= {u.strip().lower() for u in (org.get("admins") or []) + (org.get("members") or [])}
     if not members:
-        raise SystemExit("no members in base members.yml")
+        raise SystemExit("no voters in base org.yaml")
 
     if args.pr:
         prs = [gh.get(f"/repos/{repo}/pulls/{args.pr}")]
