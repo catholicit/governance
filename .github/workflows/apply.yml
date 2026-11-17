@@ -1,0 +1,46 @@
+# Makes the organization match members.yml after every merge, and once a day
+# to undo any change made by hand outside the vote.
+name: apply
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Samo prikaži plan"
+        type: boolean
+        default: true
+
+concurrency:
+  group: apply
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/create-github-app-token@v1
+        id: app
+        with:
+          app-id: ${{ vars.GOVERNANCE_APP_ID }}
+          private-key: ${{ secrets.GOVERNANCE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: pip install --quiet pyyaml
+      - name: Reconcile organization
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+        run: |
+          if [ "$DRY_RUN" = "true" ]; then
+            python3 scripts/reconcile.py
+          else
+            python3 scripts/reconcile.py --apply
+          fi

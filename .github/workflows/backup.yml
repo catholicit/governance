@@ -1,0 +1,48 @@
+# Mirrors every repository of the organization outside GitHub, so the code
+# survives even if GitHub locks the organization. Skips quietly until the
+# CODEBERG_TOKEN secret and CODEBERG_ORG variable are set.
+name: backup
+
+on:
+  schedule:
+    - cron: "41 3 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/create-github-app-token@v1
+        id: app
+        with:
+          app-id: ${{ vars.GOVERNANCE_APP_ID }}
+          private-key: ${{ secrets.GOVERNANCE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+      - name: Mirror to Codeberg
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          CB_TOKEN: ${{ secrets.CODEBERG_TOKEN }}
+          CB_ORG: ${{ vars.CODEBERG_ORG }}
+          ORG: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          if [ -z "$CB_TOKEN" ] || [ -z "$CB_ORG" ]; then
+            echo "CODEBERG_TOKEN / CODEBERG_ORG nisu postavljeni, preskačem."; exit 0
+          fi
+          gh api --paginate "/orgs/$ORG/repos?per_page=100" --jq '.[] | "\(.name) \(.private)"' > repos.txt
+          while read -r name private; do
+            echo "::group::$name"
+            curl -sf -o /dev/null -H "Authorization: token $CB_TOKEN" \
+              "https://codeberg.org/api/v1/repos/$CB_ORG/$name" \
+            || curl -sf -o /dev/null -X POST -H "Authorization: token $CB_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "{\"name\":\"$name\",\"private\":$private}" \
+              "https://codeberg.org/api/v1/orgs/$CB_ORG/repos"
+            rm -rf mirror.git
+            git clone --mirror -q "https://x-access-token:$GH_TOKEN@github.com/$ORG/$name.git" mirror.git
+            git -C mirror.git push --mirror -q \
+              "https://oauth2:$CB_TOKEN@codeberg.org/$CB_ORG/$name.git" || echo "push failed: $name"
+            echo "::endgroup::"
+          done < repos.txt

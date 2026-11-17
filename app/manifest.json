@@ -1,0 +1,19 @@
+{
+  "name": "catholicit-governance",
+  "description": "Izvršava odluke izglasane u catholicit/governance: članstvo, prava i spajanje prijedloga.",
+  "url": "https://github.com/catholicit/governance",
+  "redirect_url": "https://github.com/catholicit/governance",
+  "hook_attributes": { "url": "https://github.com/catholicit/governance", "active": false },
+  "public": false,
+  "default_permissions": {
+    "members": "write",
+    "organization_administration": "write",
+    "administration": "write",
+    "contents": "write",
+    "workflows": "write",
+    "pull_requests": "write",
+    "issues": "write",
+    "metadata": "read"
+  },
+  "default_events": []
+}

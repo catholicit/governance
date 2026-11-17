@@ -1,0 +1,40 @@
+# Jedini izvor istine za organizaciju github.com/catholicit.
+#
+# Svaka promjena ove datoteke ide kroz pull request iz forka i prolazi
+# glasanjem (vidi README.md). Nakon merge-a bot uskladi organizaciju s ovim
+# stanjem: pozove nove članove, makne one kojih ovdje nema i svima postavi
+# ista prava.
+
+org: catholicit
+
+# Pravila glasanja
+quorum:
+  # Za merge treba više od polovice članova (floor(n/2) + 1).
+  # Autor PR-a, ako je član, računa se kao glas ZA.
+  majority: true
+  # Prijedlog mora biti otvoren barem ovoliko sati prije merge-a,
+  # osim ako su ZA svi članovi (jednoglasno).
+  min_open_hours: 24
+
+# Svi članovi su ravnopravni: tim `core` ima ovu razinu prava na sve repoe.
+team: core
+repo_permission: admin
+
+# Repoi na kojima tim ima samo pravo čitanja. Governance se mijenja isključivo
+# glasanjem, pa nitko nema pravo pisanja u njega osim bota.
+restricted_repos:
+  governance: pull
+
+# Računi koji smiju biti Owner organizacije. Cilj je da to bude samo bot
+# (faza 2). Owner koji nije na popisu bit će spušten u običnog člana.
+owners:
+  - stepanic
+
+org_settings:
+  default_repository_permission: read
+  members_can_create_repositories: true
+
+# `eth` je adresa za fazu 3 (glasanje Safe potpisima). Može ostati prazna.
+members:
+  - github: stepanic
+    eth:

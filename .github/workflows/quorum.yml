@@ -1,0 +1,45 @@
+# Counts votes on open proposals and merges the ones that pass.
+#
+# Security: pull_request_target and issue_comment run this file from `main`,
+# never from the pull request. The PR's code is never checked out or executed;
+# its members.yml is only downloaded and parsed as data for the plan preview.
+name: quorum
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review]
+  issue_comment:
+    types: [created]
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: quorum
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  count:
+    if: >-
+      github.event_name != 'issue_comment' ||
+      (github.event.issue.pull_request && startsWith(github.event.comment.body, '/prebroji'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/create-github-app-token@v1
+        id: app
+        with:
+          app-id: ${{ vars.GOVERNANCE_APP_ID }}
+          private-key: ${{ secrets.GOVERNANCE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - run: pip install --quiet pyyaml
+      - name: Count votes
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          PR: ${{ github.event.pull_request.number || github.event.issue.number }}
+        run: python3 scripts/quorum.py ${PR:+--pr "$PR"}
